@@ -49,7 +49,7 @@ export function createGameServer(options = {}) {
           const expectedHost = config.publicUrl ? new URL(config.publicUrl).host : req.headers.host;
           if (originHost !== expectedHost && originHost !== req.headers.host) throw new GameError('请求来源不匹配。', 403);
         }
-        if (req.method === 'GET' && pathname === '/api/health') { json(res, 200, { ok: true, version: '1.0.9', rooms: store.rooms.size }); return; }
+        if (req.method === 'GET' && pathname === '/api/health') { json(res, 200, { ok: true, version: '1.0.10', rooms: store.rooms.size }); return; }
         if (req.method === 'GET' && pathname === '/api/config') { json(res, 200, { publicUrl: config.publicUrl, minPlayers: 3, maxPlayers: 5 }); return; }
         if (req.method === 'POST' && pathname === '/api/rooms') {
           rateLimit('create:' + ip, 15); const body = await readBody(req); json(res, 201, store.create(body.name, body.title)); return;
@@ -129,7 +129,7 @@ if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(path.resolve(
       console.error(error.code === 'EADDRINUSE' ? `端口 ${app.config.port} 已被占用，请修改 config.json 中的 port。` : error.message); process.exitCode = 1;
     });
     app.server.listen(app.config.port, app.config.host, () => {
-      console.log('\n  赎罪之旅 · 多人联机桌游  v1.0.9\n');
+      console.log('\n  赎罪之旅 · 多人联机桌游  v1.0.10\n');
       console.log(`  本机访问：http://localhost:${app.config.port}`);
       for (const interfaces of Object.values(networkInterfaces())) for (const net of interfaces || []) if (net.family === 'IPv4' && !net.internal) console.log(`  内网访问：http://${net.address}:${app.config.port}`);
       console.log(`  对外访问：http://服务器公网IP:${app.config.port}`);

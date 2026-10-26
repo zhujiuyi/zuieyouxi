@@ -126,7 +126,11 @@ export class TableScene {
     if (!width || !height || !this.renderer) return;
     this.width = width; this.height = height;
     this.renderer.setSize(width, height, false); this.camera.aspect = width / height;
-    this.camera.fov = width < 450 ? 48 : 41; this.camera.updateProjectionMatrix();
+    // Frame the board by both axes so a larger table still fits between the seats.
+    this.camera.fov = this.mode === 'board'
+      ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.max(5.4, 13 / this.camera.aspect) / (2 * Math.hypot(7.9, 9.5))))
+      : width < 450 ? 48 : 41;
+    this.camera.updateProjectionMatrix();
   }
   material(id) {
     if (this.materials.has(id || 'back')) return this.materials.get(id || 'back');

@@ -38,7 +38,21 @@
 .game-sidebar .log-header{padding:13px 16px 10px}.game-sidebar .log-list{padding:4px 15px;min-height:0;max-height:145px;overflow:auto}
 .game-sidebar .log-entry{font-size:11px;line-height:1.75;padding:8px 0;overflow-wrap:anywhere}
 .game-sidebar .chat-form{padding:10px}.game-sidebar .chat-form input{font-size:11px;padding:9px}
-.game-layout .table-stage{height:clamp(235px,32vh,335px)}
+.table-arena{display:grid;grid-template-columns:clamp(108px,12vw,150px) minmax(0,1fr) clamp(108px,12vw,150px);align-items:center;gap:12px;margin-bottom:14px}
+.table-arena .opponents{display:flex;flex-direction:column;justify-content:center;gap:16px;min-height:0;padding:0;min-width:0}
+.table-arena .opponent{flex:none;width:100%;min-width:0;max-width:none;min-height:82px;padding:11px 10px;gap:8px}
+.table-arena .opponent>div{min-width:0}
+.table-arena .opponent .avatar{flex-shrink:0;width:30px;height:30px;font-size:14px}
+.table-arena .opponent-name{max-width:none}
+.table-arena .opponent-meta{font-size:9px;line-height:1.7}
+.game-layout .table-stage{height:310px;display:grid;grid-template-rows:54px minmax(0,1fr) 52px;margin:0;min-width:0}
+.table-arena .table-caption{position:static;align-self:start;min-width:0}
+.table-arena .table-caption strong{font-size:15px;letter-spacing:2px;overflow-wrap:anywhere}
+.table-arena .table-caption p{font-size:10px;line-height:1.7;margin-top:5px}
+.table-arena .table-stage>.scene-root{position:relative;inset:auto;z-index:0;min-height:0}
+.table-arena .pile-labels{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;align-self:end;padding-top:8px}
+.table-arena .pile-labels span{width:auto;min-width:0;font-size:10px;letter-spacing:0;line-height:1.7}
+.table-arena .pile-labels b{font-size:17px;line-height:1.4}
 .game-layout .player-area{grid-template-columns:120px minmax(0,1fr);gap:14px}
 .game-layout .wickedness-panel{flex-direction:column;gap:7px;padding:12px 6px}
 .game-layout .wickedness-token{width:106px;height:111px}.game-layout .wickedness-dial{width:106px;height:106px}
@@ -63,10 +77,19 @@
  .game-layout{grid-template-columns:1fr;padding-bottom:82px}.game-sidebar{position:static;max-height:none;gap:14px}
  .game-layout .player-area{grid-template-columns:1fr}.game-layout .wickedness-panel{flex-direction:row;justify-content:flex-start;gap:20px;padding:10px 18px}
  .game-layout .wickedness-caption{text-align:left}.game-layout .wickedness-readout{justify-content:flex-start}
- .game-layout .table-stage{height:250px}.game-sidebar .log-box{max-height:235px;min-height:160px}
+ .game-sidebar .log-box{max-height:235px;min-height:160px}
  .action-panel.box{overflow:visible}.action-heading{position:fixed;z-index:25;bottom:max(10px,env(safe-area-inset-bottom));left:12px;right:12px;border:1px solid #9c7e536b;border-radius:9px;box-shadow:0 8px 35px #0009;padding:11px 13px;background:#2b2234f7;backdrop-filter:blur(14px)}
  .action-heading h2{font-size:12px}.action-count{font-size:10px}.action-heading .play-submit{min-height:38px;padding:8px 11px;min-width:108px}
  .mobile-controls-toggle{display:inline-block;font-size:10px;white-space:nowrap}.action-body{max-height:none;overflow:visible;padding:15px}
  .selection-order{grid-template-columns:repeat(3,1fr)}.toast{bottom:91px}.hand-instruction{font-size:10px}
+}
+@media(max-width:620px){
+ .table-arena{grid-template-columns:1fr 1fr;gap:12px 10px;margin-bottom:16px}
+ .table-arena .opponents{align-self:start;gap:8px}
+ .table-arena .opponent{min-height:64px;padding:8px;gap:7px}
+ .table-arena .opponent-name{font-size:10px}.table-arena .opponent-meta{font-size:8px}
+ .table-arena .opponent .avatar{width:27px;height:27px;font-size:12px}
+ .game-layout .table-stage{grid-column:1/-1;grid-row:2;height:290px;grid-template-rows:48px minmax(0,1fr) 50px}
+ .table-arena .table-caption strong{font-size:14px}
 }
 @media(prefers-reduced-motion:reduce){.hand-cards .game-card,.play-submit{transition:none}}
