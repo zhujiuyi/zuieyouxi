@@ -1,3 +1,5 @@
+import { artUrl } from './art.js';
+
 // The physical dial has 6/4 on its front and 2/0 on its reverse.
 // The number at the bottom is the value facing its owner.
 export function wickednessPanel(stage, { finished = false, winner = false } = {}) {
@@ -20,7 +22,7 @@ export function wickednessPanel(stage, { finished = false, winner = false } = {}
           <path d="M116 8 212 104Q218 110 212 116L116 212Q110 218 104 212L8 116Q2 110 8 104L104 8Q110 2 116 8Z" fill="url(#dial-edge)" stroke="#b48db8" stroke-width="1.2"/>
           <path d="M114 12 208 106Q212 110 208 114L114 208Q110 212 106 208L12 114Q8 110 12 106L106 12Q110 8 114 12Z" fill="url(#dial-purple)" stroke="#33203f" stroke-opacity=".7"/>
           <path d="M110 48 174 110 110 172 46 110Z" fill="#67417b"/>
-          <image href="/assets/pride.webp" x="45" y="48" width="130" height="126" preserveAspectRatio="xMidYMid slice" clip-path="url(#dial-illustration)"/>
+          <image href="${artUrl('pride')}" x="45" y="48" width="130" height="126" preserveAspectRatio="xMidYMid slice" clip-path="url(#dial-illustration)"/>
           <g fill="#dfc09b" opacity=".7"><path d="m63 79 2-5 2 5 5 2-5 2-2 5-2-5-5-2Z"/><path d="m145 137 2-5 2 5 5 2-5 2-2 5-2-5-5-2Z"/><path d="m139 65 1-3 1 3 3 1-3 1-1 3-1-3-3-1Z"/><path d="m77 141 1-3 1 3 3 1-3 1-1 3-1-3-3-1Z"/></g>
           <g class="dial-number dial-number-ivory" text-anchor="middle" dominant-baseline="central">
             <text x="110" y="37" transform="rotate(180 110 37)">${vertical}</text>

@@ -37,7 +37,7 @@ for (const platform of ['Windows', 'Linux']) {
     writeFileSync(path.join(destination, 'start.sh'), readFileSync(path.join(ROOT, 'start.sh'), 'utf8').replace(/\r\n/g, '\n'));
   }
   mkdirSync(data, { recursive: true });
-  writeFileSync(path.join(destination, '版本信息.json'), JSON.stringify({ app: '赎罪之旅', version: '1.0.4', platform: platform + '-x64', node: VERSION, three: '0.186.1', runtimeSha256: sha(path.join(runtime, platform === 'Windows' ? 'node.exe' : 'node')), upstreamWindowsSha256: WINDOWS_EXPECTED, upstreamLinuxArchiveSha256: LINUX_EXPECTED, date: '2026-10-25', offlineStart: true }, null, 2));
+  writeFileSync(path.join(destination, '版本信息.json'), JSON.stringify({ app: '赎罪之旅', version: JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version, platform: platform + '-x64', node: VERSION, three: '0.186.1', runtimeSha256: sha(path.join(runtime, platform === 'Windows' ? 'node.exe' : 'node')), upstreamWindowsSha256: WINDOWS_EXPECTED, upstreamLinuxArchiveSha256: LINUX_EXPECTED, date: '2026-10-26', offlineStart: true }, null, 2));
   const files = [];
   const walk = directory => { for (const name of readdirSync(directory).sort()) { const file = path.join(directory, name); if (statSync(file).isDirectory()) walk(file); else if (name !== 'SHA256SUMS.txt') files.push(`${sha(file)}  ${path.relative(destination, file).split(path.sep).join('/')}`); } };
   walk(destination); writeFileSync(path.join(destination, 'SHA256SUMS.txt'), files.join('\n') + '\n');

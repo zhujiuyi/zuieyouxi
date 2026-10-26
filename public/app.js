@@ -1,5 +1,6 @@
 import { CARDS, SUITS, META, card, label, hasSuit, meldOptions } from '/shared/cards.mjs';
 import { wickednessPanel } from './wickedness.js';
+import { artUrl } from './art.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -23,7 +24,7 @@ const invitation = () => `${(state.publicUrl || location.origin).replace(/\/$/, 
 const savedSession = id => { try { return JSON.parse(storage.get('redemption:room:' + id)); } catch { return null; } };
 const cardHTML = (id, selected = false, action = 'card', extra = '') => {
   const c = card(id), m = META[c.suit];
-  return `<button type="button" class="game-card${selected ? ' selected' : ''}" style="--ink:${m.color}" data-action="${action}" data-card="${id}" aria-label="${escape(label(id) + '，' + m.short)}" aria-pressed="${selected}" title="${escape(m.text)}" ${extra}><span class="card-ink"><span class="card-top"><span class="card-value">${c.value ?? '◎'}</span><span>${m.name}</span></span><img class="card-art" src="/assets/${c.suit}.webp" alt="${m.name}插画" draggable="false"><span class="card-description"><b>${m.short}</b><small>${m.english}</small></span></span>${selected ? '<span class="selection-check">✓</span>' : ''}</button>`;
+  return `<button type="button" class="game-card${selected ? ' selected' : ''}" style="--ink:${m.color}" data-action="${action}" data-card="${id}" aria-label="${escape(label(id) + '，' + m.short)}" aria-pressed="${selected}" title="${escape(m.text)}" ${extra}><span class="card-ink"><span class="card-top"><span class="card-value">${c.value ?? '◎'}</span><span>${m.name}</span></span><img class="card-art" src="${artUrl(c.suit)}" alt="${m.name}插画" draggable="false"><span class="card-description"><b>${m.short}</b><small>${m.english}</small></span></span>${selected ? '<span class="selection-check">✓</span>' : ''}</button>`;
 };
 function toast(message, error = false) {
   clearTimeout(toastTimer); $('#toast').textContent = message; $('#toast').className = 'toast visible' + (error ? ' error' : '');

@@ -1,5 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { META, card } from '/shared/cards.mjs';
+import { artUrl } from './art.js';
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const roundedRect = (ctx, x, y, width, height, radius) => { ctx.beginPath(); ctx.roundRect(x, y, width, height, radius); };
@@ -14,8 +15,9 @@ function feltTexture() {
   return texture;
 }
 function backTexture() {
-  const canvas = document.createElement('canvas'); canvas.width = 384; canvas.height = 544;
+  const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 1088;
   const c = canvas.getContext('2d');
+  c.scale(2, 2);
   c.fillStyle = '#e2d6c4'; roundedRect(c, 0, 0, 384, 544, 23); c.fill();
   c.fillStyle = '#38283e'; roundedRect(c, 13, 13, 358, 518, 15); c.fill();
   c.strokeStyle = '#a48a65'; c.lineWidth = 2; roundedRect(c, 25, 25, 334, 494, 9); c.stroke();
@@ -31,12 +33,17 @@ function backTexture() {
 }
 function faceTexture(id, art) {
   const item = card(id), meta = META[item.suit];
-  const canvas = document.createElement('canvas'); canvas.width = 384; canvas.height = 544;
+  const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 1088;
   const c = canvas.getContext('2d');
+  c.scale(2, 2); c.imageSmoothingQuality = 'high';
   c.fillStyle = '#e8dfcd'; roundedRect(c, 0, 0, 384, 544, 21); c.fill();
   c.save(); roundedRect(c, 15, 15, 354, 514, 11); c.clip();
   c.fillStyle = meta.color; c.fillRect(15, 15, 354, 514);
-  if (art) c.drawImage(art, 15, 38, 354, 340);
+  if (art) {
+    const scale = Math.max(354 / art.width, 340 / art.height);
+    const width = 354 / scale, height = 340 / scale;
+    c.drawImage(art, (art.width - width) / 2, (art.height - height) / 2, width, height, 15, 38, 354, 340);
+  }
   c.fillStyle = '#eee5d1'; c.beginPath(); c.moveTo(15, 397); c.lineTo(52, 359); c.lineTo(332, 359); c.lineTo(369, 397); c.lineTo(369, 529); c.lineTo(15, 529); c.closePath(); c.fill();
   c.strokeStyle = meta.color; c.lineWidth = 3; c.stroke();
   c.fillStyle = '#f9f1dd'; c.shadowColor = '#24162e'; c.shadowBlur = 4; c.font = 'bold 69px Georgia'; c.textAlign = 'left'; c.fillText(item.value ?? '◎', 28, 88);
@@ -103,7 +110,7 @@ export class TableScene {
     const emblem = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.6), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(emblemCanvas), transparent: true, depthWrite: false }));
     emblem.rotation.x = -Math.PI / 2; emblem.position.set(0, .024, -1.75); this.table.add(emblem);
     this.art = Object.fromEntries(await Promise.all(Object.keys(META).map(async suit => {
-      const image = new Image(); image.src = `/assets/${suit}.webp`;
+      const image = new Image(); image.src = artUrl(suit);
       try { await image.decode(); return [suit, image]; } catch { return [suit, null]; }
     })));
     this.resizeObserver = new ResizeObserver(() => this.resize()); this.resizeObserver.observe(this.container);
@@ -124,6 +131,7 @@ export class TableScene {
   material(id) {
     if (this.materials.has(id || 'back')) return this.materials.get(id || 'back');
     const texture = id ? faceTexture(id, this.art[card(id).suit]) : this.back;
+    texture.anisotropy = Math.max(1, Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
     if (id) this.textures.set(id, texture);
     const material = new THREE.MeshStandardMaterial({ map: texture, roughness: .64, metalness: .01, transparent: true, alphaTest: .3 });
     this.materials.set(id || 'back', material); return material;
@@ -174,6 +182,14 @@ export class TableScene {
         if (center) this.animations.push({ object: center, targetY: center.position.y, start: performance.now(), lift: .85 });
       }
       if (room.pending?.type === 'greed') room.pending.dealt.forEach((d, i) => this.makeCard(d.card, (i - 2) * .9, .055 + i * .012, 1.65, (i - 2) * .08, .72));
+    }
+    // Keep higher-resolution textures only for cards still visible on the table.
+    const visibleMaterials = new Set();
+    this.cards.traverse(object => { if (object.material) visibleMaterials.add(object.material); });
+    for (const [id, material] of this.materials) {
+      if (id === 'back' || visibleMaterials.has(material)) continue;
+      material.dispose(); this.textures.get(id)?.dispose();
+      this.materials.delete(id); this.textures.delete(id);
     }
     this.resize();
   }
