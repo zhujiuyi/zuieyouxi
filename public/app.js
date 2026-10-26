@@ -1,4 +1,4 @@
-import { CARDS, SUITS, META, card, label, hasSuit, meldOptions } from '/shared/cards.mjs';
+import { CARDS, SUITS, META, card, label, hasSuit, meldOptions, selectionPlan } from '/shared/cards.mjs';
 import { wickednessPanel } from './wickedness.js';
 import { artUrl } from './art.js';
 
@@ -13,7 +13,7 @@ const icons = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.plus}</svg>`;
 const storage = { get(key) { try { return localStorage.getItem(key); } catch { return null; } }, set(key, value) { try { localStorage.setItem(key, value); } catch {} }, remove(key) { try { localStorage.removeItem(key); } catch {} } };
 const state = {
-  room: null, session: null, selected: new Set(), connected: false, busy: false, publicUrl: '', top: '', target: '', effect: 'sloth', mode: 'draw', direction: '1', timerOffset: 0, nameError: '', roomError: '', leavingRoomId: null,
+  room: null, session: null, selected: new Set(), connected: false, busy: false, publicUrl: '', top: '', target: '', effect: 'sloth', mode: 'draw', direction: '1', timerOffset: 0, nameError: '', roomError: '', leavingRoomId: null, meldKind: '', playError: '', stealConfirmation: null,
   inputs: { playerName: storage.get('redemption:name') || '', inviteName: storage.get('redemption:name') || '', roomId: '', chat: '', starter: '', responseCard: '', responseTarget: '' }
 };
 let streamGeneration = 0, abortStream, scene, sceneNode, toastTimer, lastStateKey = '', sceneLoading;
@@ -24,7 +24,8 @@ const invitation = () => `${(state.publicUrl || location.origin).replace(/\/$/, 
 const savedSession = id => { try { return JSON.parse(storage.get('redemption:room:' + id)); } catch { return null; } };
 const cardHTML = (id, selected = false, action = 'card', extra = '') => {
   const c = card(id), m = META[c.suit];
-  return `<button type="button" class="game-card${selected ? ' selected' : ''}" style="--ink:${m.color}" data-action="${action}" data-card="${id}" aria-label="${escape(label(id) + '，' + m.short)}" aria-pressed="${selected}" title="${escape(m.text)}" ${extra}><span class="card-ink"><span class="card-top"><span class="card-value">${c.value ?? '◎'}</span><span>${m.name}</span></span><img class="card-art" src="${artUrl(c.suit)}" alt="${m.name}插画" draggable="false"><span class="card-description"><b>${m.short}</b><small>${m.english}</small></span></span>${selected ? '<span class="selection-check">✓</span>' : ''}</button>`;
+  const order = selected ? selectionPlan([...state.selected], state.meldKind).cards.indexOf(id) + 1 : 0;
+  return `<button type="button" class="game-card${selected ? ' selected' : ''}${selected && id === state.top ? ' execution-card' : ''}" style="--ink:${m.color};--selection-order:${order}" data-action="${action}" data-card="${id}" aria-label="${escape(label(id) + '，' + m.short + (selected ? `，待出第 ${order} 张${id === state.top ? '，最上方' : ''}` : ''))}" aria-pressed="${selected}" title="${escape(m.text)}" ${extra}><span class="card-ink"><span class="card-top"><span class="card-value">${c.value ?? '◎'}</span><span>${m.name}</span></span><img class="card-art" src="${artUrl(c.suit)}" alt="${m.name}插画" draggable="false"><span class="card-description"><b>${m.short}</b><small>${m.english}</small></span></span>${selected ? `<span class="selection-check" aria-hidden="true">${order}</span>` : ''}</button>`;
 };
 function toast(message, error = false) {
   clearTimeout(toastTimer); $('#toast').textContent = message; $('#toast').className = 'toast visible' + (error ? ' error' : '');
@@ -117,23 +118,82 @@ function opponent(p, i) {
   const r = state.room, cleared = 3 - p.stage / 2;
   return `<div class="opponent ${r.turnPlayerId === p.id ? 'active' : ''}"><i class="status-dot ${p.online ? '' : 'offline'}"></i>${avatar(p, i)}<div><div class="opponent-name">${escape(p.name)}</div><div class="opponent-meta">手牌 <b>${p.handCount}</b> · 罪恶值 <b>${p.stage}</b>${p.sloth.length ? ' · 💤' : ''}</div><div class="stage-mini" title="已完成 ${cleared} 次清手">${[0, 1, 2].map(n => `<i class="${n < cleared ? 'done' : ''}"></i>`).join('')}</div></div></div>`;
 }
+function currentSelection() {
+  const ids = [...state.selected], options = meldOptions(ids);
+  if (state.meldKind && !options.some(o => o.kind === state.meldKind)) state.meldKind = '';
+  const plan = selectionPlan(ids, state.meldKind);
+  state.top = plan.top;
+  return plan;
+}
 function selectionControls() {
-  const r = state.room, ids = [...state.selected], options = meldOptions(ids);
-  const tops = [...new Set(options.flatMap(o => o.tops))];
-  if (!tops.includes(state.top)) state.top = tops.at(-1) || '';
-  const selectedTop = card(state.top), effect = selectedTop?.suit === 'corruption' ? state.effect : selectedTop?.suit;
+  const r = state.room, plan = currentSelection(), ids = [...state.selected];
+  const selectedTop = card(plan.top), effect = selectedTop?.suit === 'corruption' ? state.effect : selectedTop?.suit;
   const others = r.players.filter(p => p.id !== state.session.playerId);
   if (!others.some(p => p.id === state.target)) state.target = others[0]?.id || '';
   const select = (id, title, opts) => `<div><label for="${id}">${title}</label><select id="${id}">${opts}</select></div>`;
   const option = (value, text, current) => `<option value="${value}" ${value === current ? 'selected' : ''}>${escape(text)}</option>`;
   let fields = '';
-  if (tops.length > 1) fields += select('top', '最上方的牌 / 发动效果', tops.map(id => option(id, label(id), state.top)).join(''));
+  if (plan.options.length > 1) fields += select('meldKind', '组合方式', plan.options.map(o => option(o.kind, o.kind, plan.kind)).join(''));
   if (selectedTop?.suit === 'corruption') fields += select('effect', '腐化的效果', SUITS.map(s => option(s, META[s].name, state.effect)).join(''));
-  if (effect === 'gluttony') fields += select('mode', '暴食的选择', option('draw', '摸 3 张，再行动', state.mode) + option('steal', '随机抽对手 1 张，再行动', state.mode));
-  if (['pride', 'wrath', 'lust'].includes(effect) || (effect === 'gluttony' && state.mode === 'steal')) fields += select('target', '选择一名旅伴', others.map(p => option(p.id, p.name, state.target)).join(''));
+  if (effect === 'gluttony') fields += select('mode', '暴食的选择', option('draw', '摸 3 张，再行动', state.mode) + option('steal', '抽取对手 1 张，再行动', state.mode));
+  if (['pride', 'wrath', 'lust'].includes(effect) || (effect === 'gluttony' && state.mode === 'steal')) fields += select('target', '选择一名旅伴', others.map(p => option(p.id, `${p.name} · ${p.handCount} 张手牌`, state.target)).join(''));
   if (effect === 'greed') fields += select('direction', '贪婪的发牌方向', option('1', '顺时针 →', state.direction) + option('-1', '逆时针 ←', state.direction));
-  const valid = options.some(o => o.tops.includes(state.top));
-  return `<div class="hand-help"><span>${ids.length ? (valid ? `已选 ${ids.length} 张 · ${options.filter(o => o.tops.includes(state.top)).map(o => o.kind).join(' / ')} · 发动${META[effect]?.name || ''}` : `已选 ${ids.length} 张 · 组合不合法`) : '点击选牌，再点击取消 · 长按文字提示查看效果'}</span><button type="button" class="nav-button" data-action="clear">清除选择</button></div><div class="play-controls"><div class="selection-options">${fields || `<p class="tiny muted">${ids.length ? META[effect]?.short || '选择合法的组合后出牌' : '同花色、同数字，或至少两张连续数字'}</p>`}</div><button type="button" class="btn gold" data-action="play" ${!valid || state.busy || !state.connected ? 'disabled' : ''}>打出${ids.length ? ' ' + ids.length + ' 张' : '手牌'}${icon('arrow')}</button></div>`;
+  const queue = plan.valid ? plan.cards : ids;
+  return `<section class="action-panel box" aria-label="出牌操作"><div class="action-heading"><div><h2>出牌操作</h2><span class="action-count">已选 ${ids.length} 张</span></div><button type="button" class="nav-button mobile-controls-toggle" data-action="show-controls">出牌设置</button><button type="button" class="btn gold play-submit" data-action="play" ${!ids.length || state.busy || !state.connected ? 'disabled' : ''}>${state.busy ? '提交中…' : `出牌${ids.length ? `（${ids.length}张）` : ''}`}${icon('arrow')}</button></div><div class="action-body"><p class="selection-status ${ids.length && !plan.valid ? 'invalid' : ''}">${ids.length ? (plan.valid ? `${plan.kind} · 按下方顺序叠放` : plan.reason) : '点选手牌后，点击“出牌”提交。'}</p>${queue.length ? `<ol class="selection-order" aria-label="待出牌顺序，从底到顶">${queue.map((id, i) => `<li class="${id === plan.top ? 'execution' : ''}" style="--ink:${META[card(id).suit].color}"><span class="queue-number">${i + 1}</span><span>${label(id)}</span>${id === plan.top ? '<b>最上方</b>' : ''}</li>`).join('')}</ol>` : '<p class="selection-empty">同花色、同数字，或至少两张连续数字。</p>'}${plan.valid ? `<div class="execution-summary"><span>本次发动</span><strong>${label(plan.top)}${selectedTop?.suit === 'corruption' ? ` · ${META[effect]?.name || ''}` : ''}</strong><small>${plan.kind === '顺子' ? '顺子自动升序，最大数字在最上方。' : '最后选中的牌在最上方。'}</small></div>` : ''}<div class="selection-options">${fields}</div>${state.playError ? `<p class="play-validation" role="alert">${escape(state.playError)}</p>` : ''}<div class="action-footer"><span class="timer" data-timer></span><button type="button" class="nav-button" data-action="clear" ${ids.length ? '' : 'disabled'}>清除选择</button></div></div></section>`;
+}
+function actionPanel() {
+  const r = state.room;
+  if (r.phase === 'playing' && r.turnPlayerId === r.selfId && !r.pending) return selectionControls();
+  return `<section class="action-panel box" aria-label="牌局操作"><div class="action-heading"><div><h2>${r.pending ? '牌效处理' : r.phase === 'finished' ? '本局结束' : '等待行动'}</h2><span class="action-count">${r.phase === 'finished' ? '可点击手牌查看效果' : r.pending ? '先完成当前效果' : `轮到 ${escape(nameOf(r.turnPlayerId))}`}</span></div><button type="button" class="nav-button mobile-controls-toggle" data-action="show-controls">${r.pending ? '查看响应' : '查看状态'}</button></div><div class="action-body">${r.pending ? effectPanel() : `<p class="selection-empty">${r.phase === 'finished' ? '可由房主开始下一局。' : '等待旅伴出牌。'}</p><span class="timer" data-timer></span>`}</div></section>`;
+}
+function refreshSelection(keyboard = false) {
+  const plan = currentSelection(), ids = plan.cards, focusedId = document.activeElement?.id;
+  const hand = $('.hand-cards'); if (hand) hand.dataset.selectionInput = keyboard ? 'keyboard' : 'pointer';
+  document.querySelectorAll('.hand-cards .game-card').forEach(el => {
+    const index = ids.indexOf(el.dataset.card), selected = index >= 0;
+    el.classList.toggle('selected', selected); el.classList.toggle('execution-card', selected && el.dataset.card === plan.top);
+    el.setAttribute('aria-pressed', String(selected)); el.style.setProperty('--selection-order', String(index + 1));
+    el.setAttribute('aria-label', label(el.dataset.card) + '，' + META[card(el.dataset.card).suit].short + (selected ? `，待出第 ${index + 1} 张${el.dataset.card === plan.top ? '，最上方' : ''}` : ''));
+    let badge = el.querySelector('.selection-check');
+    if (selected) {
+      if (!badge) { badge = document.createElement('span'); badge.className = 'selection-check'; el.appendChild(badge); }
+      badge.textContent = String(index + 1); badge.setAttribute('aria-hidden', 'true');
+    } else badge?.remove();
+  });
+  const panel = $('.action-panel'); if (panel) panel.outerHTML = actionPanel();
+  const queue = $('.selection-order'); if (queue) queue.scrollTop = queue.scrollHeight;
+  if (focusedId) document.getElementById(focusedId)?.focus({ preventScroll: true });
+  updateTimers();
+}
+function selectionError(message) {
+  state.playError = message; refreshSelection(); toast(message, true);
+}
+async function submitSelected(confirmation = null) {
+  if (state.busy || !state.room || !state.session) return;
+  const r = state.room;
+  if (!state.connected) { selectionError('连接正在恢复，请稍后再出牌。'); return; }
+  if (r.phase !== 'playing' || r.turnPlayerId !== r.selfId || r.pending) { selectionError('当前不能出牌，请等待自己的回合或完成牌效。'); return; }
+  const plan = currentSelection();
+  if (!plan.valid) { selectionError(plan.reason); return; }
+  if (!plan.cards.every(id => r.hand.includes(id))) { selectionError('手牌已变化，请重新选择。'); return; }
+  const effect = card(plan.top).suit === 'corruption' ? state.effect : card(plan.top).suit;
+  const target = r.players.find(p => p.id === state.target && p.id !== r.selfId);
+  if (card(plan.top).suit === 'corruption' && !SUITS.includes(effect)) { selectionError('请选择腐化要发动的效果。'); return; }
+  if ((['pride','wrath','lust'].includes(effect) || effect === 'gluttony' && state.mode === 'steal') && !target) { selectionError('请选择一名有效的旅伴。'); return; }
+  if (effect === 'gluttony' && !['draw','steal'].includes(state.mode)) { selectionError('请选择暴食的行动。'); return; }
+  if (effect === 'gluttony' && state.mode === 'steal' && !target.handCount) { selectionError('对方没有可以抽取的手牌。'); return; }
+  if (effect === 'greed' && ![1,-1].includes(Number(state.direction))) { selectionError('请选择贪婪的发牌方向。'); return; }
+  const signature = JSON.stringify([r.id,r.turnNo,plan.cards,plan.kind,plan.top,effect,state.mode,state.target,target?.handCount,target?.stage]);
+  if (confirmation && confirmation.signature !== signature) { selectionError('牌局或选牌已变化，请重新确认。'); return; }
+  const lastCard = effect === 'gluttony' && state.mode === 'steal' && target.handCount === 1;
+  if (lastCard && !confirmation) {
+    state.stealConfirmation = { signature, roomId:r.id, turnNo:r.turnNo };
+    const consequence = target.stage <= 2 ? `<strong>${escape(target.name)} 将立即清空手牌并赢得本局。</strong>` : `${escape(target.name)} 将立即晋级，罪恶值由 ${target.stage} 降至 ${target.stage - 2}，并按规则补牌。`;
+    openModal('确认抽取对方最后一张牌？', `<div class="last-card-warning"><p>${escape(target.name)} 当前只剩 <strong>1 张手牌</strong>。</p><p>${consequence}</p><p class="tiny muted">仍要用暴食抽取这张牌吗？</p></div><div class="effect-actions"><button type="button" class="btn ghost" data-action="close">取消，保留选牌</button><button type="button" class="btn danger" data-action="confirm-last-card">仍然抽取</button></div>`);
+    return;
+  }
+  state.playError = ''; state.stealConfirmation = null;
+  await sendAction({ type:'play',cards:plan.cards,top:plan.top,kind:plan.kind,effect:state.effect,targetId:state.target,mode:state.mode,direction:Number(state.direction),confirmLastCard:lastCard && Boolean(confirmation) });
 }
 const responseCards = suit => state.room.hand.filter(id => hasSuit(id, suit));
 function effectPanel() {
@@ -162,18 +222,21 @@ function effectPanel() {
   return `<section class="effect-box" aria-live="polite"><h3>${titles[p.type]}</h3><p>${desc}</p>${revealed}${controls ? `<div class="effect-actions">${controls}</div>` : ''}<div class="timer tiny" data-timer></div></section>`;
 }
 function logPanel() {
-  return `<aside class="box log-box"><div class="log-header"><h2>旅程手记</h2><span>本局实时记录</span></div><div class="log-list" id="log-list">${state.room.logs.map(entry => `<div class="log-entry ${entry.type}"><time>${new Date(entry.at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>${escape(entry.text)}</div>`).join('')}</div><form id="chat-form" class="chat-form"><label class="visually-hidden" for="chat">发送桌边消息</label><input id="chat" value="${escape(state.inputs.chat)}" placeholder="说点什么…" maxlength="180" autocomplete="off"><button class="btn ghost" type="submit" aria-label="发送消息" ${state.busy ? 'disabled' : ''}>${icon('send')}</button></form></aside>`;
+  return `<section class="box log-box"><div class="log-header"><h2>旅程手记</h2><span>本局实时记录</span></div><div class="log-list" id="log-list">${state.room.logs.map(entry => `<div class="log-entry ${entry.type}"><time>${new Date(entry.at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>${escape(entry.text)}</div>`).join('')}</div><form id="chat-form" class="chat-form"><label class="visually-hidden" for="chat">发送桌边消息</label><input id="chat" value="${escape(state.inputs.chat)}" placeholder="说点什么…" maxlength="180" autocomplete="off"><button class="btn ghost" type="submit" aria-label="发送消息" ${state.busy ? 'disabled' : ''}>${icon('send')}</button></form></section>`;
 }
 function board() {
   const r = state.room, me = self(), myTurn = r.turnPlayerId === me.id && !r.pending && r.phase === 'playing';
-  const others = r.players.filter(p => p.id !== me.id);
-  return `<main><div class="room-top"><p class="room-tag">${escape(r.title)} <strong>#${r.id}</strong></p><div class="room-tools"><button class="nav-button" data-action="copy">复制邀请</button><button class="nav-button" data-action="rules">规则</button><button class="nav-button" data-action="leave">${r.phase === 'playing' ? '暂离' : '离开'}</button></div></div><div class="game-layout"><div class="table-column">${r.phase === 'finished' ? `<section class="winner-box"><span class="winner-icon">♧</span><h2>${escape(nameOf(r.winnerId))}，完成救赎。</h2><p>三次清空手牌，走到了旅程的终点。</p>${r.hostId === me.id ? '<button class="btn gold" data-action="rematch">再开启一段旅程</button>' : '<span class="tiny muted">等待房主开启下一局，或离开房间。</span>'}</section>` : ''}<div class="opponents">${others.map(opponent).join('')}</div><section class="table-stage"><div class="table-caption"><strong>${r.phase === 'finished' ? '旅 程 已 抵 达 终 点' : r.pending ? '罪 孽 正 在 结 算' : myTurn ? '轮 到 你 的 回 合' : `${escape(nameOf(r.turnPlayerId))} 的 回 合`}</strong><p>${r.phase === 'playing' ? `第 ${r.turnNo} 回合 <span data-timer class="timer"></span>` : '谢谢每一位同行的旅伴'}</p></div>${sceneSlot('board')}<div class="pile-labels"><span>抽牌堆<b>${r.deckCount}</b></span><span>弃牌堆<b>${r.discardCount}</b></span><span>光环<b>${r.haloAvailable ? '可获取' : '已入手'}</b></span></div></section>${effectPanel()}<div class="player-area">${wickednessPanel(me.stage, { finished: r.phase === 'finished', winner: r.winnerId === me.id })}<section class="hand-zone"><div class="hand-heading"><strong>${escape(me.name)}的手牌 <span class="muted">/ ${r.hand.length} 张${me.sloth.length ? ' · 懒惰生效中' : ''}</span></strong></div><div class="hand-scroll"><div class="hand-cards">${[...r.hand].sort((a, b) => { const ca = card(a), cb = card(b); return Object.keys(META).indexOf(ca.suit) - Object.keys(META).indexOf(cb.suit) || ca.value - cb.value; }).map(id => cardHTML(id, state.selected.has(id))).join('') || '<p class="muted tiny">手中已没有罪孽。</p>'}</div></div>${myTurn ? selectionControls() : `<div class="turn-notice">${r.phase === 'finished' ? '本局已结束，可点选手牌查看效果。' : r.pending ? '完成上方的效果选择后，旅程继续。' : `等待 ${escape(nameOf(r.turnPlayerId))} 出牌。`}</div>`}</section></div></div>${logPanel()}</div></main>`;
+  const others = r.players.filter(p => p.id !== me.id), actionMarkup = actionPanel();
+  return `<main><div class="room-top"><p class="room-tag">${escape(r.title)} <strong>#${r.id}</strong></p><div class="room-tools"><button class="nav-button" data-action="copy">复制邀请</button><button class="nav-button" data-action="rules">规则</button><button class="nav-button" data-action="leave">${r.phase === 'playing' ? '暂离' : '离开'}</button></div></div><div class="game-layout"><div class="table-column">${r.phase === 'finished' ? `<section class="winner-box"><span class="winner-icon">♧</span><h2>${escape(nameOf(r.winnerId))}，完成救赎。</h2><p>三次清空手牌，走到了旅程的终点。</p>${r.hostId === me.id ? '<button class="btn gold" data-action="rematch">再开启一段旅程</button>' : '<span class="tiny muted">等待房主开启下一局，或离开房间。</span>'}</section>` : ''}<div class="opponents">${others.map(opponent).join('')}</div><section class="table-stage"><div class="table-caption"><strong>${r.phase === 'finished' ? '旅 程 已 抵 达 终 点' : r.pending ? '罪 孽 正 在 结 算' : myTurn ? '轮 到 你 的 回 合' : `${escape(nameOf(r.turnPlayerId))} 的 回 合`}</strong><p>${r.phase === 'playing' ? `第 ${r.turnNo} 回合 <span data-timer class="timer"></span>` : '谢谢每一位同行的旅伴'}</p></div>${sceneSlot('board')}<div class="pile-labels"><span>抽牌堆<b>${r.deckCount}</b></span><span>弃牌堆<b>${r.discardCount}</b></span><span>光环<b>${r.haloAvailable ? '可获取' : '已入手'}</b></span></div></section><div class="player-area">${wickednessPanel(me.stage, { finished: r.phase === 'finished', winner: r.winnerId === me.id })}<section class="hand-zone"><div class="hand-heading"><strong>${escape(me.name)}的手牌 <span class="muted">/ ${r.hand.length} 张${me.sloth.length ? ' · 懒惰生效中' : ''}</span></strong></div><div class="hand-scroll"><div class="hand-cards">${[...r.hand].sort((a, b) => { const ca = card(a), cb = card(b); return Object.keys(META).indexOf(ca.suit) - Object.keys(META).indexOf(cb.suit) || ca.value - cb.value; }).map(id => cardHTML(id, state.selected.has(id))).join('') || '<p class="muted tiny">手中已没有罪孽。</p>'}</div></div><p class="hand-instruction">${myTurn ? '点击选牌或取消；在操作区点击“出牌”提交。' : r.pending ? '请在操作区处理当前牌效。' : '点击手牌可查看效果。'}</p></section></div></div><aside class="game-sidebar">${actionMarkup}${logPanel()}</aside></div></main>`;
 }
 function render() {
   const active = document.activeElement, focusedId = active?.id, selectionStart = active?.selectionStart, selectionEnd = active?.selectionEnd;
+  const handScroll = $('.hand-scroll')?.scrollLeft || 0, handFocus = active?.closest?.('.hand-cards .game-card')?.dataset.card;
   const logEl = $('#log-list'), logScroll = logEl?.scrollTop, logAtEnd = !logEl || logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 80;
   $('#app').innerHTML = `<div class="shell${!state.room && !pathRoom() ? ' home-shell' : ''}">${header()}${state.room && !state.connected ? '<div class="connection-banner" role="status">与牌桌的连接暂时中断，正在自动重连。你的座位和手牌会保留。</div>' : ''}${state.room ? (state.room.phase === 'lobby' ? lobby() : board()) : pathRoom() ? inviteLanding(pathRoom()) : landing()}${footer()}</div>`;
   if (focusedId) { const el = document.getElementById(focusedId); if (el) { el.focus({ preventScroll: true }); try { if (typeof selectionStart === 'number') el.setSelectionRange(selectionStart, selectionEnd); } catch {} } }
+  const newHand = $('.hand-scroll'); if (newHand) newHand.scrollLeft = handScroll;
+  if (handFocus) document.querySelector(`.hand-cards [data-card="${handFocus}"]`)?.focus({ preventScroll: true });
   const newLog = $('#log-list'); if (newLog) newLog.scrollTop = logAtEnd ? newLog.scrollHeight : logScroll;
   mountScene(); updateTimers();
 }
@@ -205,10 +268,12 @@ function setRoom(room) {
   if (!state.session || room.id !== state.session.roomId || room.selfId !== state.session.playerId) return;
   if (state.room && room.revision < state.room.revision) return;
   const phaseChanged = state.room && state.room.phase !== room.phase;
+  if (state.stealConfirmation && (state.stealConfirmation.roomId !== room.id || state.stealConfirmation.turnNo !== room.turnNo || room.pending || room.phase !== 'playing')) closeModal(true);
   const key = `${room.id}:${room.revision}:${room.players.map(p => p.online).join()}`;
   state.room = room; state.timerOffset = room.serverTime - Date.now();
   state.selected = new Set([...state.selected].filter(id => room.hand.includes(id)));
-  if (room.turnPlayerId !== room.selfId || room.pending) state.selected.clear();
+  if (room.turnPlayerId !== room.selfId || room.pending || room.phase !== 'playing') state.selected.clear();
+  if (!state.selected.size) { state.meldKind = ''; state.top = ''; state.playError = ''; }
   if (key !== lastStateKey) { lastStateKey = key; render(); if (phaseChanged) window.scrollTo({ top: 0, behavior: 'instant' }); }
 }
 async function enter(session) {
@@ -314,12 +379,13 @@ function openModal(title, content) {
 }
 function closeModal(force = false) {
   if (!force && state.busy && $('#join-room-form')) return;
+  state.stealConfirmation = null;
   $('#modal-root').innerHTML = ''; document.body.style.overflow = '';
   if ($('#modal-root').previousFocus?.isConnected) $('#modal-root').previousFocus.focus();
   else $('#playerName')?.focus({ preventScroll: true });
 }
 function rules() {
-  openModal('旅程开始前，了解一点规则。', `<div class="rule-steps"><div class="rule-step"><b>01</b><h3>打出合法组合</h3><p>可以单出、同花色、同数字或顺子。顺子至少 2 张，0–8 连续，不能循环，不能过牌。无须跟随上一家的牌。</p></div><div class="rule-step"><b>02</b><h3>结算最上方的牌</h3><p>每次只发动最上方的一张。顺子必须以最大数字在上；其他组合可选择最上方的牌。被抽走或被弃掉的牌不发动效果。</p></div><div class="rule-step"><b>03</b><h3>三次清空，完成救赎</h3><p>效果全部完成后，检查所有空手玩家。罪恶值 6 → 4 → 2 → 0，并补对应数量的手牌。到 0 时空手即可获胜。</p></div></div><div class="rule-detail"><h3>开局与补牌</h3><p>3–5 人，每人起始 6 张，起始玩家额外摸 1 张。51 张牌洗混，光环在桌面场外。抽牌堆用完后重洗弃牌堆；尚在结算的牌与面前的懒惰不参与重洗。</p></div><div class="rule-detail"><h3>光环与腐化</h3><p>净化为 0，没有花色，可以参加顺子。光环无花色无数字，只能单独打出；清空手牌后回到桌面。腐化固定为 8，同时属于七种花色；可选择其中一种效果，不能代替其他数字，也不能发动净化。</p></div><div class="rule-detail"><h3>清手时机与平手</h3><p>回合效果结算完成后，所有空手玩家都晋级。暴食抽走对方最后一张时，对方立即晋级。若多人同时到 0，则这些玩家各摸 1 张继续，直到只有一位 0 罪恶值玩家空手。</p></div><div class="rule-detail"><h3>联机约定</h3><p>等待大厅可离开和移除玩家；对局开始后座位固定。保留原浏览器即可重连。每次操作限时 ${state.room?.settings.turnSeconds || 120} 秒；超时会自动单出一张或执行保守的响应。色欲暗选在双方提交前不会公开。刷新页面不改变身份。</p></div><div class="rule-detail"><h3>规则参考</h3><p>本版本采用原版规则，平手处理参考出版方说明。</p><p><a href="https://iellogames.com/wp-content/uploads/2021/09/Deadlies_Rulebook_LOCA_V1_Light.pdf" target="_blank" rel="noopener">出版方英文规则</a> · 原作 Paul Saxberg · 插画 Leah Fuhrman · Smirk &amp; Dagger / IELLO</p></div>`);
+  openModal('旅程开始前，了解一点规则。', `<div class="rule-steps"><div class="rule-step"><b>01</b><h3>打出合法组合</h3><p>可以单出、同花色、同数字或顺子。顺子至少 2 张，0–8 连续，不能循环，不能过牌。无须跟随上一家的牌。</p></div><div class="rule-step"><b>02</b><h3>结算最上方的牌</h3><p>每次只发动最上方的一张。顺子必须以最大数字在上；其他组合按选牌顺序叠放，最后选中的牌在最上方。被抽走或被弃掉的牌不发动效果。</p></div><div class="rule-step"><b>03</b><h3>三次清空，完成救赎</h3><p>效果全部完成后，检查所有空手玩家。罪恶值 6 → 4 → 2 → 0，并补对应数量的手牌。到 0 时空手即可获胜。</p></div></div><div class="rule-detail"><h3>开局与补牌</h3><p>3–5 人，每人起始 6 张，起始玩家额外摸 1 张。51 张牌洗混，光环在桌面场外。抽牌堆用完后重洗弃牌堆；尚在结算的牌与面前的懒惰不参与重洗。</p></div><div class="rule-detail"><h3>光环与腐化</h3><p>净化为 0，没有花色，可以参加顺子。光环无花色无数字，只能单独打出；清空手牌后回到桌面。腐化固定为 8，同时属于七种花色；可选择其中一种效果，不能代替其他数字，也不能发动净化。</p></div><div class="rule-detail"><h3>清手时机与平手</h3><p>回合效果结算完成后，所有空手玩家都晋级。暴食抽走对方最后一张时，对方立即晋级。若多人同时到 0，则这些玩家各摸 1 张继续，直到只有一位 0 罪恶值玩家空手。</p></div><div class="rule-detail"><h3>联机约定</h3><p>等待大厅可离开和移除玩家；对局开始后座位固定。保留原浏览器即可重连。每次操作限时 ${state.room?.settings.turnSeconds || 120} 秒；超时会自动单出一张或执行保守的响应。色欲暗选在双方提交前不会公开。刷新页面不改变身份。</p></div><div class="rule-detail"><h3>规则参考</h3><p>本版本采用原版规则，平手处理参考出版方说明。</p><p><a href="https://iellogames.com/wp-content/uploads/2021/09/Deadlies_Rulebook_LOCA_V1_Light.pdf" target="_blank" rel="noopener">出版方英文规则</a> · 原作 Paul Saxberg · 插画 Leah Fuhrman · Smirk &amp; Dagger / IELLO</p></div>`);
 }
 function gallery() {
   openModal('七宗罪，与你将遇到的卡牌。', `<div class="gallery">${Object.keys(META).map(s => `<div class="gallery-item">${cardHTML(SUITS.includes(s) ? s + '-5' : s, false, 'inspect')}<p>${META[s].short}</p></div>`).join('')}</div>`);
@@ -344,18 +410,21 @@ document.addEventListener('click', async event => {
   else if (action === 'copy') await copyInvite();
   else if (action === 'card') {
     if (state.room?.turnPlayerId !== state.room?.selfId || state.room?.pending || state.room?.phase !== 'playing') { inspect(el.dataset.card); return; }
+    if (state.busy) return;
     const id = el.dataset.card;
     if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
-    state.top = ''; render();
+    state.playError = ''; state.stealConfirmation = null; refreshSelection(event.detail === 0);
   }
-  else if (action === 'clear') { state.selected.clear(); state.top = ''; render(); }
+  else if (action === 'clear') { state.selected.clear(); state.top = ''; state.meldKind = ''; state.playError = ''; state.stealConfirmation = null; refreshSelection(event.detail === 0); }
   else if (action === 'start') await sendAction({ type: 'start', starterId: $('#starter').value });
   else if (action === 'ready') await sendAction({ type: 'ready', ready: !self().ready });
   else if (action === 'kick') {
     openModal('移除这位旅伴？', `<p class="muted tiny">将 ${escape(nameOf(el.dataset.player))} 移出等待大厅。对方可以使用邀请链接重新加入。</p><div class="effect-actions"><button class="btn danger" data-action="confirm-kick" data-player="${el.dataset.player}">确认移除</button><button class="btn ghost" data-action="close">取消</button></div>`);
   }
   else if (action === 'confirm-kick') { closeModal(); await sendAction({ type: 'kick', targetId: el.dataset.player }); }
-  else if (action === 'play') await sendAction({ type: 'play', cards: [...state.selected], top: state.top, effect: state.effect, targetId: state.target, mode: state.mode, direction: Number(state.direction) });
+  else if (action === 'play') await submitSelected();
+  else if (action === 'confirm-last-card') { const confirmation = state.stealConfirmation; closeModal(); await submitSelected(confirmation); }
+  else if (action === 'show-controls') $('.action-panel')?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   else if (action === 'respond') await sendAction({ type: 'respond', choice: el.dataset.choice, cardId: el.dataset.choice === 'none' ? null : $('#responseCard')?.value || null, targetId: $('#responseTarget')?.value });
   else if (action === 'rematch') await sendAction({ type: 'rematch' });
   else if (action === 'leave') {
@@ -375,7 +444,7 @@ document.addEventListener('input', event => {
 document.addEventListener('change', event => {
   const el = event.target;
   if (Object.hasOwn(state.inputs, el.id)) state.inputs[el.id] = el.value;
-  if (['top', 'effect', 'target', 'mode', 'direction'].includes(el.id)) { state[el.id] = el.value; render(); }
+  if (['meldKind', 'effect', 'target', 'mode', 'direction'].includes(el.id)) { state[el.id] = el.value; state.playError = ''; state.stealConfirmation = null; refreshSelection(event.detail === 0); }
 });
 document.addEventListener('submit', async event => {
   event.preventDefault(); if (state.busy) return;

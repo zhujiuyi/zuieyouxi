@@ -1,0 +1,68 @@
+.game-layout{grid-template-columns:minmax(0,1fr) 304px;gap:20px;align-items:start}
+.game-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 120px);min-width:0}
+.action-panel.box{padding:0;overflow:hidden;flex-shrink:0;scroll-margin:90px}
+.action-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 17px;border-bottom:1px solid #ffffff12;background:#302638}
+.action-heading h2{font-size:13px;line-height:1.4;color:#ead8bf}
+.action-count{display:block;font-size:10px;color:#b6a2bf;margin-top:4px}
+.action-heading .play-submit{min-height:38px;min-width:110px;width:auto;max-width:165px;padding:8px 12px;font-size:12px;gap:7px;white-space:nowrap;flex-shrink:0}
+.play-submit:active:not(:disabled){transform:scale(.97)}
+.mobile-controls-toggle{display:none}
+.action-body{padding:14px 17px 15px;max-height:max(100px,calc(100dvh - 330px));overflow:auto;scrollbar-width:thin;scrollbar-color:#6f527e #211a28}
+.selection-status{font-size:11px;line-height:1.7;color:#d8c2a0;margin-bottom:10px}
+.selection-status.invalid,.play-validation{color:#f0aa99}
+.selection-empty{font-size:11px;line-height:1.8;color:#ad98b7;margin:2px 0 12px}
+.selection-order{list-style:none;margin:0 0 12px;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:112px;overflow:auto;scrollbar-width:thin}
+.selection-order li{display:flex;align-items:center;gap:5px;padding:7px 6px;border:1px solid #ffffff15;border-left:3px solid var(--ink);border-radius:5px;background:#ffffff04;font-size:10px;color:#ccb9d5;min-width:0}
+.selection-order .execution{border-color:#d2b175;background:#c3a15e17;color:#f1dba7}
+.queue-number{font:11px Georgia,serif;color:#9f89ad;flex-shrink:0}
+.selection-order b{margin-left:auto;color:#dfbd78;font-size:8px;font-weight:400;white-space:nowrap}
+.execution-summary{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:5px 10px;padding:10px 11px;margin-bottom:12px;background:#d4b3780b;border:1px solid #d4b3782b;border-radius:6px}
+.execution-summary>span{font-size:10px;color:#a994b4}.execution-summary strong{font-size:12px;color:#ecd29d;text-align:right}
+.execution-summary small{grid-column:1/-1;color:#b6a1bf;font-size:10px;line-height:1.6}
+.action-panel .selection-options{display:grid;grid-template-columns:1fr;gap:10px}
+.action-panel .selection-options>div{min-width:0}
+.action-panel .selection-options label{font-size:10px;line-height:1.5;margin-bottom:4px}
+.action-panel .selection-options select{font-size:12px;height:37px;padding:8px 10px}
+.action-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:13px;padding-top:10px;border-top:1px solid #ffffff0c}
+.action-footer .timer{font-size:10px}.action-footer button{font-size:10px;white-space:nowrap}
+.play-validation{font-size:11px;line-height:1.7;margin-top:12px;padding:9px 10px;border:1px solid #bd6c533b;border-radius:5px;background:#8b432016}
+.action-panel .effect-box{padding:0;margin:0;border:0;background:none;box-shadow:none;animation:none}
+.action-panel .effect-box h3{font-size:13px}.action-panel .effect-box p{font-size:11px}
+.action-panel .effect-actions{gap:8px}.action-panel .effect-actions select{max-width:100%;width:100%}
+.action-panel .effect-actions .btn{min-height:35px;padding:8px 10px;font-size:11px}
+.game-sidebar .log-box{position:static;align-self:auto;max-height:220px;min-height:100px;flex:1;padding:0}
+.game-sidebar .log-header{padding:13px 16px 10px}.game-sidebar .log-list{padding:4px 15px;min-height:0;max-height:145px;overflow:auto}
+.game-sidebar .log-entry{font-size:11px;line-height:1.75;padding:8px 0;overflow-wrap:anywhere}
+.game-sidebar .chat-form{padding:10px}.game-sidebar .chat-form input{font-size:11px;padding:9px}
+.game-layout .table-stage{height:clamp(235px,32vh,335px)}
+.game-layout .player-area{grid-template-columns:120px minmax(0,1fr);gap:14px}
+.game-layout .wickedness-panel{flex-direction:column;gap:7px;padding:12px 6px}
+.game-layout .wickedness-token{width:106px;height:111px}.game-layout .wickedness-dial{width:106px;height:106px}
+.game-layout .wickedness-caption{text-align:center}.game-layout .wickedness-readout{justify-content:center}
+.hand-zone{min-width:0}.hand-instruction{font-size:10px;color:#aa94b5;line-height:1.7;margin-top:7px}
+.hand-scroll{overflow-x:auto;overflow-y:hidden;padding:28px 8px 17px;touch-action:pan-x pan-y}
+.hand-cards{width:max-content;min-width:100%;justify-content:flex-start;align-items:flex-end;padding:0 12px;isolation:isolate}
+.hand-cards .game-card{margin-left:-27px;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 140ms cubic-bezier(.23,1,.32,1);transform:none}
+.hand-cards .game-card:first-child{margin-left:0}
+.hand-cards .game-card:hover:not(:disabled){transform:none;z-index:1;box-shadow:0 3px 0 #b5a68e,0 6px 0 #66575a,0 9px 15px #0006}
+.hand-cards .game-card.selected,.hand-cards .game-card.selected:hover:not(:disabled){transform:translateY(-16px);z-index:calc(100 + var(--selection-order,0));border-color:#edd096;box-shadow:0 0 0 2px #d7b477,0 4px 0 #9b7e4c,0 16px 22px #0008}
+.hand-cards .game-card:focus-visible{outline:2px solid #f3dba3;outline-offset:4px}
+.hand-cards .selection-check{min-width:21px;width:auto;height:21px;right:3px;bottom:3px;padding:0 5px;font:700 11px Georgia,serif;pointer-events:none}
+.hand-cards .execution-card .selection-check{background:#f3d49a}.hand-cards .execution-card .selection-check::after{content:'↑';font-size:10px;margin-left:2px}
+.hand-cards[data-selection-input="keyboard"] .game-card{transition:none}
+.last-card-warning p{font-size:14px;color:#cdb8d6;line-height:1.9;margin-bottom:12px}.last-card-warning strong{color:#efbd9b}
+.modal:has(.last-card-warning){width:min(520px,100%)}
+@media(hover:hover) and (pointer:fine){.hand-cards .game-card:not(.selected):hover:not(:disabled){transform:translateY(-7px);z-index:80}}
+@media(max-height:620px) and (min-width:901px){.game-sidebar .log-box{max-height:150px;min-height:80px}.action-body{max-height:max(80px,calc(100dvh - 300px))}}
+@media(max-width:1100px) and (min-width:901px){.game-layout{grid-template-columns:minmax(0,1fr) 278px;gap:14px}.action-heading{padding:13px}.action-body{padding:12px 13px}.game-layout .player-area{grid-template-columns:100px minmax(0,1fr);gap:10px}.game-layout .wickedness-token{width:88px;height:93px}.game-layout .wickedness-dial{width:88px;height:88px}}
+@media(max-width:900px){
+ .game-layout{grid-template-columns:1fr;padding-bottom:82px}.game-sidebar{position:static;max-height:none;gap:14px}
+ .game-layout .player-area{grid-template-columns:1fr}.game-layout .wickedness-panel{flex-direction:row;justify-content:flex-start;gap:20px;padding:10px 18px}
+ .game-layout .wickedness-caption{text-align:left}.game-layout .wickedness-readout{justify-content:flex-start}
+ .game-layout .table-stage{height:250px}.game-sidebar .log-box{max-height:235px;min-height:160px}
+ .action-panel.box{overflow:visible}.action-heading{position:fixed;z-index:25;bottom:max(10px,env(safe-area-inset-bottom));left:12px;right:12px;border:1px solid #9c7e536b;border-radius:9px;box-shadow:0 8px 35px #0009;padding:11px 13px;background:#2b2234f7;backdrop-filter:blur(14px)}
+ .action-heading h2{font-size:12px}.action-count{font-size:10px}.action-heading .play-submit{min-height:38px;padding:8px 11px;min-width:108px}
+ .mobile-controls-toggle{display:inline-block;font-size:10px;white-space:nowrap}.action-body{max-height:none;overflow:visible;padding:15px}
+ .selection-order{grid-template-columns:repeat(3,1fr)}.toast{bottom:91px}.hand-instruction{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.hand-cards .game-card,.play-submit{transition:none}}

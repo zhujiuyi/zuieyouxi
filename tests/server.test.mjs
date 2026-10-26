@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createGameServer } from '../server.mjs';
-import { SUITS, card, hasSuit } from '../lib/cards.mjs';
+import { CARDS, SUITS, card, hasSuit } from '../lib/cards.mjs';
 import { assertConservation } from '../lib/engine.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -127,6 +127,23 @@ test('超时接管会实际推进游戏，聊天不会延长行动时限', async
     assert.ok(!after.hand.includes(played));
   } finally { await f.cleanup(); }
 });
+
+test('HTTP 暴食最后一张：缺少确认被拒绝且不改手牌，确认后才结算', async () => {
+  const f=await fixture();
+  try {
+    const h=await f.create('确认者'),b=await f.join(h.roomId,'最后一张'),c=await f.join(h.roomId,'旁观旅伴');
+    await f.action(b,{type:'ready',ready:true});await f.action(c,{type:'ready',ready:true});await f.action(h,{type:'start'});
+    const room=f.store.get(h.roomId),hands=[['gluttony-1','sloth-1'],['pride-1'],['pride-2']];
+    room.players.forEach((p,i)=>{p.hand=hands[i];p.stage=i===1?2:6;p.sloth=[];});
+    room.deck=Object.keys(CARDS).filter(id=>id!=='halo'&&!hands.flat().includes(id));room.discard=[];room.table=[];room.pending=null;room.haloAvailable=true;assertConservation(room);
+    const before=await f.read(h),body={type:'play',cards:['gluttony-1'],top:'gluttony-1',kind:'单张',mode:'steal',targetId:b.playerId};
+    const refused=await f.action(h,body);assert.equal(refused.status,400);
+    const unchanged=await f.read(h);assert.equal(unchanged.revision,before.revision);assert.deepEqual(unchanged.hand,before.hand);
+    const accepted=await f.action(h,{...body,confirmLastCard:true});assert.equal(accepted.status,200);
+    const after=await f.read(h);assert.equal(after.phase,'finished');assert.equal(after.winnerId,b.playerId);
+    assert.equal((await f.read(c)).logs.some(l=>l.text.includes('傲慢1')),false);
+  } finally {await f.cleanup();}
+});
 test('主存档损坏时读备份；损坏文件保留，不静默删除', async () => {
   const f = await fixture();
   try {
@@ -196,7 +213,7 @@ test('三个独立客户端经 HTTP 和各自 SSE 完成整局，赢家与公开
           ids = groups.sort((a, b) => b.length - a.length)[0];
         }
         const top = ids.find(id => card(id).suit === 'sloth') || ids.at(-1);
-        body = { type: 'play', cards: ids, top, effect: 'sloth', targetId: own.players.find(p => p.id !== who).id, mode: 'steal', direction: 1 };
+        body = { type: 'play', cards: ids, top, effect: 'sloth', targetId: own.players.find(p => p.id !== who).id, mode: 'steal', direction: 1, confirmLastCard: own.players.find(p => p.id !== who).handCount === 1 };
       }
       const result = await f.action(session, body, own.revision); assert.equal(result.status, 200, JSON.stringify(result.json));
       overview = await f.read(h);

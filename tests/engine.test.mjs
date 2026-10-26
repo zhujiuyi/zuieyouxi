@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CARDS, SUITS, card, hasSuit, meldOptions } from '../lib/cards.mjs';
+import { CARDS, SUITS, card, hasSuit, meldOptions, selectionPlan } from '../lib/cards.mjs';
 import { startGame, playCards, respond, publicRoom, assertConservation } from '../lib/engine.mjs';
 
 export function fresh() {
@@ -18,6 +18,79 @@ function setup(hands, nextDraws = [], stages = [6, 6, 6]) {
 }
 const play = (r, cards, other = {}) => { playCards(r, r.players[r.turnIndex].id, { cards, top: cards.at(-1), targetId: 'p2', mode: 'draw', direction: 1, ...other }); assertConservation(r); };
 const answer = (r, who, data) => { respond(r, who, data); assertConservation(r); };
+
+test('选牌顺序决定普通组合顶牌，顺子自动升序，多种合法组合可切换', () => {
+  const normal = selectionPlan(['pride-5', 'pride-3']);
+  assert.equal(normal.kind, '同花色'); assert.equal(normal.top, 'pride-3');
+  assert.deepEqual(normal.cards, ['pride-5', 'pride-3']);
+  const run = selectionPlan(['envy-4', 'lust-2', 'wrath-3']);
+  assert.equal(run.kind, '顺子'); assert.equal(run.top, 'envy-4');
+  assert.deepEqual(run.cards, ['lust-2', 'wrath-3', 'envy-4']);
+  assert.equal(selectionPlan(['pride-3', 'pride-2']).top, 'pride-3');
+  assert.equal(selectionPlan(['pride-3', 'pride-2'], '同花色').top, 'pride-2');
+  assert.equal(selectionPlan(['halo', 'pride-1']).valid, false);
+  assert.equal(selectionPlan(['sloth-1', 'lust-3']).valid, false);
+  assert.equal(selectionPlan(['pride-1'], '未知组合').valid, false);
+});
+
+test('明确组合方式时，服务器拒绝错误顶牌并按顺子顺序记录桌面', () => {
+  const normal = setup([['pride-5','pride-3','sloth-7'],['lust-1'],['wrath-1']]);
+  const before = structuredClone(normal);
+  assert.throws(() => playCards(normal,'p1',{cards:['pride-5','pride-3'],top:'pride-5',kind:'同花色',targetId:'p2'}), /最后选中/);
+  assert.deepEqual(normal,before);
+  const run = setup([['envy-4','pride-2','wrath-3','sloth-7'],['pride-1'],['lust-1']],['greed-5','lust-7']);
+  assert.throws(() => playCards(run,'p1',{cards:['envy-4','pride-2','wrath-3'],top:'wrath-3',kind:'顺子'}), /最大数字/);
+  playCards(run,'p1',{cards:['envy-4','pride-2','wrath-3'],top:'envy-4',kind:'顺子'});
+  assert.deepEqual(run.lastPlay.cards,['pride-2','wrath-3','envy-4']);
+  assert.equal(run.lastPlay.effect,'envy'); assertConservation(run);
+});
+
+test('暴食抽最后一张需要明确确认，确认前不改变牌局，确认后正确晋级或获胜', () => {
+  for (const stage of [6,4,2,0]) {
+    const room=setup([['gluttony-1','sloth-1'],['pride-1'],['pride-2']],['greed-1','greed-2','greed-3','greed-4'],[6,stage,6]);
+    const before=structuredClone(room);
+    assert.throws(()=>play(room,['gluttony-1'],{mode:'steal'}),/最后一张/);
+    assert.deepEqual(room,before);
+    play(room,['gluttony-1'],{mode:'steal',confirmLastCard:true});
+    assert.equal(room.players[1].stage,Math.max(0,stage-2));
+    if(stage<=2){assert.equal(room.phase,'finished');assert.equal(room.winnerId,'p2');}
+    else {assert.equal(room.phase,'playing');assert.equal(room.players[1].hand.length,stage-2);}
+    assert.equal(room.logs.some(entry=>entry.text.includes('傲慢1')),false,'暗抽牌的牌名不能进入公开日志');
+  }
+});
+
+test('贪婪主动结束记录每次明发人与收牌人，并逐人列出实际收到的牌', () => {
+  const r=setup([['greed-1','pride-7'],['pride-1'],['pride-2']],['lust-1','envy-1','greed-2','sloth-1']);
+  play(r,['greed-1']);
+  for(let i=0;i<4;i++)answer(r,'p1',{choice:'deal'});
+  assert.ok(r.logs.some(l=>l.text==='p1 因贪婪向 p2 明发 色欲1（待结算）。'));
+  assert.ok(!r.logs.some(l=>l.text.includes('因 p1 的贪婪，收到')));
+  answer(r,'p1',{choice:'stop'});
+  assert.ok(r.logs.some(l=>l.text==='p2 因 p1 的贪婪，收到 色欲1、贪婪2（2 张）。'));
+  assert.ok(r.logs.some(l=>l.text==='p3 因 p1 的贪婪，收到 嫉妒1、懒惰1（2 张）。'));
+  assert.ok(r.players[1].hand.includes('lust-1')&&r.players[1].hand.includes('greed-2'));
+});
+
+test('贪婪成功、失败与牌堆耗尽均有准确结算日志', () => {
+  const success=setup([['greed-1','pride-7'],['pride-1'],['pride-2']],['greed-2','lust-1','envy-1','greed-3','sloth-1']);
+  play(success,['greed-1']);for(let i=0;i<5;i++)answer(success,'p1',{choice:'deal'});
+  assert.ok(success.logs.some(l=>l.text.includes('p1 的贪婪成功')));
+  assert.ok(success.logs.some(l=>l.text==='p2 因 p1 的贪婪，收到 贪婪2、嫉妒1、懒惰1（3 张）。'));
+  for(const draws of [['lust-1','lust-2'],['corruption']]) {
+    const failure=setup([['greed-1','pride-7'],['pride-1'],['pride-2']],draws);
+    play(failure,['greed-1']);draws.forEach(()=>answer(failure,'p1',{choice:'deal'}));
+    const result=failure.logs.find(l=>l.text.includes('贪婪失败'));
+    assert.ok(result.text.includes(draws[0]==='corruption'?'翻到了腐化':'色欲 再次出现'));
+    assert.ok(result.text.includes('由 p1 收回'));
+    assert.ok(!failure.logs.some(l=>l.text.includes('因 p1 的贪婪，收到')));
+  }
+  const empty=setup([['greed-1','pride-7'],['pride-1'],['pride-2']],['purity']);
+  play(empty,['greed-1']);answer(empty,'p1',{choice:'deal'});
+  empty.players[2].hand.push(...empty.deck,...empty.discard);empty.deck=[];empty.discard=[];assertConservation(empty);
+  answer(empty,'p1',{choice:'deal'});
+  assert.ok(empty.logs.some(l=>l.text.includes('牌堆已无牌可发，p1 的贪婪结束')));
+  assert.ok(empty.logs.some(l=>l.text==='p2 因 p1 的贪婪，收到 净化0（1 张）。'));
+});
 
 test('开局发牌：51 张洗牌、光环场外、先手 7 张，其余各 6 张', () => {
   const r = fresh(); startGame(r);
@@ -67,7 +140,7 @@ test('暴食无论摸三张还是抽对手一张都获得额外回合', () => {
 });
 test('暴食抽走对方最后一张会立即令对方晋级或获胜', () => {
   const r = setup([['gluttony-1', 'sloth-1'], ['halo'], ['pride-2']], [], [6, 2, 6]);
-  play(r, ['gluttony-1'], { mode: 'steal' }); assert.equal(r.winnerId, 'p2'); assert.equal(r.phase, 'finished');
+  play(r, ['gluttony-1'], { mode: 'steal', confirmLastCard: true }); assert.equal(r.winnerId, 'p2'); assert.equal(r.phase, 'finished');
 });
 test('净化从别人手中取回光环，对方空手在结算末晋级；光环不进弃牌堆', () => {
   const r = setup([['purity'], ['halo'], ['pride-2']]);
@@ -158,7 +231,7 @@ test('100 局自动模拟全部完成，逐次验证 52 张牌守恒与隐藏手
           if (!ids.length) ids = [owner.hand[0]];
         }
         const top = ids.find(id => card(id).suit === 'sloth') || ids.at(-1);
-        playCards(r, owner.id, { cards: ids, top, effect: 'sloth', targetId: other.id, mode: game % 2 ? 'steal' : 'draw', direction: game % 2 ? 1 : -1 });
+        playCards(r, owner.id, { cards: ids, top, effect: 'sloth', targetId: other.id, mode: game % 2 ? 'steal' : 'draw', direction: game % 2 ? 1 : -1, confirmLastCard: other.hand.length === 1 });
         effects.add(r.lastPlay.effect);
         ids.forEach(id => categories.add(card(id).suit));
       }
