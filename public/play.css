@@ -1,10 +1,11 @@
 .game-layout{grid-template-columns:minmax(0,1fr) 304px;gap:20px;align-items:start;padding-top:16px}
-.game-layout .room-top{justify-content:flex-start;flex-wrap:wrap;gap:10px 24px;padding:0 0 17px}
+.game-layout .room-top{flex-direction:column;align-items:flex-start;gap:4px;padding:0 0 17px}
 .game-layout .room-tag{min-width:0;overflow-wrap:anywhere}
 .game-layout .room-tools{flex-shrink:0;white-space:nowrap}
 .game-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 120px);min-width:0}
 .action-panel.box{padding:0;overflow:hidden;flex-shrink:0;scroll-margin:90px}
 .action-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 17px;border-bottom:1px solid #ffffff12;background:#302638}
+.action-submit-row{border-top:1px solid #ffffff12;border-bottom:0}
 .action-heading h2{font-size:13px;line-height:1.4;color:#ead8bf}
 .action-count{display:block;font-size:10px;color:#b6a2bf;margin-top:4px}
 .action-heading .play-submit{min-height:38px;min-width:110px;width:auto;max-width:165px;padding:8px 12px;font-size:12px;gap:7px;white-space:nowrap;flex-shrink:0}
