@@ -1,0 +1,29 @@
+# Publish application sources and runtime assets only.
+/*
+!/.gitignore
+!/.gitattributes
+!/package.json
+!/config.json
+!/server.mjs
+!/start.bat
+!/start.sh
+!/启动游戏.bat
+!/lib/
+!/public/
+!/scripts/
+!/tests/
+
+# Original rule documents and their optional in-app photo copies stay local.
+/public/assets/rules-*.webp
+
+**/node_modules/
+**/__pycache__/
+*.py[cod]
+*.zip
+*.tar.gz
+*.log
+*.pem
+*.key
+.env
+.env.*
+.DS_Store

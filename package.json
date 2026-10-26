@@ -1,0 +1,13 @@
+{
+  "name": "redemption-journey",
+  "version": "1.0.4",
+  "private": true,
+  "type": "module",
+  "description": "赎罪之旅 · 无需注册的多人联机桌游",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "engines": { "node": ">=22" }
+}
